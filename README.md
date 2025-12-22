@@ -45,7 +45,7 @@ cd llm-chat-service
 
 2. Set your Groq API key:
 ```bash
-export GROQ_API_KEY=your_api_key_here
+export GROQ_API_KEY=
 ```
 
 3. Start the services:
@@ -69,7 +69,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 3. Set environment variables:
 ```bash
-export GROQ_API_KEY=your_api_key_here
+export GROQ_API_KEY=
 export PORT=8000
 export REDIS_ADDR=localhost:6379
 export MAX_TOKENS=1024
@@ -83,13 +83,6 @@ go run cmd/main.go
 
 ## API Documentation
 
-### Health Check
-
-```bash
-curl http://localhost:8000/health
-```
-
-Returns: `OK`
 
 ### Chat (JSON Response)
 

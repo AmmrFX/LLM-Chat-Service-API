@@ -12,13 +12,13 @@ import (
 
 // Handler handles HTTP requests
 type Handler struct {
-	chatService *service.ChatService
+	chatService service.ChatService
 	logger      *zap.Logger
 	upgrader    websocket.Upgrader
 }
 
-// NewHandler creates a new handler
-func NewHandler(chatService *service.ChatService, logger *zap.Logger) *Handler {
+// NewHandler creates a new handler with injected dependencies
+func NewHandler(chatService service.ChatService, logger *zap.Logger) *Handler {
 	return &Handler{
 		chatService: chatService,
 		logger:      logger,
@@ -28,13 +28,6 @@ func NewHandler(chatService *service.ChatService, logger *zap.Logger) *Handler {
 			},
 		},
 	}
-}
-
-// HealthHandler handles health check requests
-func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
 }
 
 // ChatHandler handles chat requests
@@ -74,19 +67,25 @@ func (h *Handler) handleJSONChat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("Chat processing failed", zap.Error(err))
 		statusCode := http.StatusInternalServerError
-		if err.Error() == "validation error" || err.Error()[:14] == "validation error" {
+		errMsg := err.Error()
+		if len(errMsg) >= 14 && errMsg[:14] == "validation error" {
 			statusCode = http.StatusBadRequest
 		} else {
 			statusCode = http.StatusBadGateway
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		if encodeErr := json.NewEncoder(w).Encode(map[string]string{"error": errMsg}); encodeErr != nil {
+			h.logger.Error("Failed to encode error response", zap.Error(encodeErr))
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"response": response})
+	w.WriteHeader(http.StatusOK)
+	if encodeErr := json.NewEncoder(w).Encode(map[string]string{"response": response}); encodeErr != nil {
+		h.logger.Error("Failed to encode response", zap.Error(encodeErr))
+	}
 }
 
 // handleSSEChat handles Server-Sent Events streaming

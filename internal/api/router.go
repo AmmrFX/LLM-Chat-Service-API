@@ -13,21 +13,14 @@ import (
 func SetupRouter(handler *Handler, logger *zap.Logger) *mux.Router {
 	router := mux.NewRouter()
 
-	// Apply logging middleware
 	router.Use(func(next http.Handler) http.Handler {
 		return LoggingMiddleware(logger, next)
 	})
 
-	// Health check
-	router.HandleFunc("/health", handler.HealthHandler).Methods("GET")
+	router.HandleFunc("/chat", handler.ChatHandler).Methods("GET", "POST")
 
-	// Chat endpoint
-	router.HandleFunc("/chat", handler.ChatHandler).Methods("POST")
-
-	// Metrics endpoint (bonus)
 	router.Handle("/metrics", promhttp.Handler()).Methods("GET")
 
-	// Register Prometheus metrics
 	registerMetrics()
 
 	return router
