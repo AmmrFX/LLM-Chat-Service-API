@@ -10,7 +10,6 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-// MemoryStore manages in-memory conversation history
 type MemoryStore struct {
 	mu           sync.RWMutex
 	messages     []Message

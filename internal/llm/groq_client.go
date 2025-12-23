@@ -3,9 +3,10 @@ package llm
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
+
+	apperror "llm-chat-service/internal/error"
 )
 
 // Client interface for LLM operations
@@ -82,7 +83,7 @@ func (c *GroqClient) StreamChat(messages []Message, maxTokens int, onToken func(
 
 	resp, err := c.DoRequest(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+		return "", err // Already wrapped with AppError
 	}
 	defer resp.Body.Close()
 
@@ -90,7 +91,7 @@ func (c *GroqClient) StreamChat(messages []Message, maxTokens int, onToken func(
 
 	fullResponse, err := ScanStream(scanner, onToken)
 	if err != nil {
-		return "", fmt.Errorf("failed to scan stream: %w", err)
+		return "", apperror.NewLLMError("failed to process LLM stream", err)
 	}
 
 	return fullResponse.String(), nil
@@ -107,27 +108,27 @@ func (c *GroqClient) Chat(messages []Message, maxTokens int) (string, error) {
 
 	resp, err := c.DoRequest(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("groq API error: %w", err)
+		return "", err // Already wrapped with AppError
 	}
 	defer resp.Body.Close()
 
 	var chatResp ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return "", fmt.Errorf("groq API error: failed to decode response: %w", err)
+		return "", apperror.NewLLMError("failed to decode LLM API response", err)
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("groq API error: no choices in response")
+		return "", apperror.NewLLMError("no choices in LLM response", nil)
 	}
 
 	choice := chatResp.Choices[0]
 	if choice.Message == nil {
-		return "", fmt.Errorf("groq API error: message is nil in response choice")
+		return "", apperror.NewLLMError("message is nil in LLM response choice", nil)
 	}
 
 	content := choice.Message.Content
 	if content == "" {
-		return "", fmt.Errorf("groq API error: empty content in response")
+		return "", apperror.NewLLMError("empty content in LLM response", nil)
 	}
 
 	return content, nil

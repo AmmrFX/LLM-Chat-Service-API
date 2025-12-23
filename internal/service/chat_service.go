@@ -2,10 +2,11 @@ package service
 
 import (
 	"fmt"
-	InternalError "llm-chat-service/internal/error"
+	"time"
+
+	apperror "llm-chat-service/internal/error"
 	"llm-chat-service/internal/llm"
 	"llm-chat-service/internal/storage"
-	"time"
 )
 
 // chatService handles chat business logic
@@ -40,23 +41,32 @@ type ChatRequest struct {
 // Validate validates the chat request
 func (r *ChatRequest) Validate() error {
 	if len(r.Messages) == 0 {
-		return InternalError.ErrMessagesEmpty
+		return apperror.NewValidationError("messages cannot be empty", nil)
 	}
 
 	// Validate each message
 	for i, msg := range r.Messages {
 		if msg.Role != "user" && msg.Role != "assistant" {
-			return fmt.Errorf(InternalError.ErrInvalidRole.Error(), msg.Role, i)
+			return apperror.NewValidationError(
+				fmt.Sprintf("invalid role '%s' at index %d: must be 'user' or 'assistant'", msg.Role, i),
+				nil,
+			)
 		}
 		if msg.Content == "" {
-			return fmt.Errorf(InternalError.ErrEmptyContent.Error(), i)
+			return apperror.NewValidationError(
+				fmt.Sprintf("empty content at index %d", i),
+				nil,
+			)
 		}
 	}
 
 	// Last message must be from user
 	lastMsg := r.Messages[len(r.Messages)-1]
 	if lastMsg.Role != "user" {
-		return fmt.Errorf(InternalError.ErrLastMessageNotUser.Error(), lastMsg.Role)
+		return apperror.NewValidationError(
+			fmt.Sprintf("last message must be from user, got '%s'", lastMsg.Role),
+			nil,
+		)
 	}
 
 	return nil
@@ -66,20 +76,16 @@ func (r *ChatRequest) Validate() error {
 func (s *chatService) ProcessChat(req *ChatRequest) (string, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
-		return "", fmt.Errorf(InternalError.ErrValidation.Error(), err)
+		return "", err // Already wrapped with AppError
 	}
 
-	// Get current history
 	history := s.messageStore.GetMessages()
 
-	// Add new user message to history
 	newUserMsg := req.Messages[len(req.Messages)-1]
 	s.messageStore.AddMessage(newUserMsg)
 
-	// Prepare messages for LLM (include history + new message)
 	llmMessages := append(history, newUserMsg)
 
-	// Convert to LLM message format
 	groqMessages := make([]llm.Message, len(llmMessages))
 	for i, msg := range llmMessages {
 		groqMessages[i] = llm.Message{
@@ -106,7 +112,7 @@ func (s *chatService) ProcessChat(req *ChatRequest) (string, error) {
 	// Call LLM API
 	response, err := s.llmClient.Chat(groqMessages, s.maxTokens)
 	if err != nil {
-		return "", fmt.Errorf(InternalError.ErrGroqAPI.Error(), err)
+		return "", err // Already wrapped with AppError from LLM client
 	}
 
 	// Add assistant response to history
@@ -123,7 +129,7 @@ func (s *chatService) ProcessChat(req *ChatRequest) (string, error) {
 func (s *chatService) ProcessChatStream(req *ChatRequest, onToken func(string) error) (string, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
-		return "", fmt.Errorf(InternalError.ErrValidation.Error(), err)
+		return "", err // Already wrapped with AppError
 	}
 
 	// Get current history
@@ -161,7 +167,7 @@ func (s *chatService) ProcessChatStream(req *ChatRequest, onToken func(string) e
 	// Stream from LLM API
 	response, err := s.llmClient.StreamChat(groqMessages, s.maxTokens, onToken)
 	if err != nil {
-		return "", fmt.Errorf(InternalError.ErrGroqAPI.Error(), err)
+		return "", err // Already wrapped with AppError from LLM client
 	}
 
 	// Add assistant response to history

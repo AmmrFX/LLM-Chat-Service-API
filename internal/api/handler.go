@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"llm-chat-service/internal/service"
 	"net/http"
+
+	apperror "llm-chat-service/internal/error"
+	"llm-chat-service/internal/service"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -59,25 +61,14 @@ func (h *Handler) handleJSONChat(w http.ResponseWriter, r *http.Request) {
 	var req service.ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("Failed to decode request", zap.Error(err))
-		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		h.sendErrorResponse(w, apperror.NewValidationError("Invalid JSON in request body", err))
 		return
 	}
 
 	response, err := h.chatService.ProcessChat(&req)
 	if err != nil {
 		h.logger.Error("Chat processing failed", zap.Error(err))
-		statusCode := http.StatusInternalServerError
-		errMsg := err.Error()
-		if len(errMsg) >= 14 && errMsg[:14] == "validation error" {
-			statusCode = http.StatusBadRequest
-		} else {
-			statusCode = http.StatusBadGateway
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusCode)
-		if encodeErr := json.NewEncoder(w).Encode(map[string]string{"error": errMsg}); encodeErr != nil {
-			h.logger.Error("Failed to encode error response", zap.Error(encodeErr))
-		}
+		h.sendErrorResponse(w, err)
 		return
 	}
 
@@ -98,7 +89,7 @@ func (h *Handler) handleSSEChat(w http.ResponseWriter, r *http.Request) {
 	var req service.ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("Failed to decode request", zap.Error(err))
-		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		h.sendErrorResponse(w, apperror.NewValidationError("Invalid JSON in request body", err))
 		return
 	}
 
@@ -130,8 +121,10 @@ func (h *Handler) handleSSEChat(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.logger.Error("Streaming failed", zap.Error(err))
-		// Send error as SSE
-		errorMsg := fmt.Sprintf("data: {\"error\": \"%s\"}\n\n", err.Error())
+		// Send error as SSE with structured format
+		errorResponse := apperror.NewErrorResponse(err)
+		errorJSON, _ := json.Marshal(errorResponse)
+		errorMsg := fmt.Sprintf("data: %s\n\n", string(errorJSON))
 		_, _ = w.Write([]byte(errorMsg))
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
@@ -159,6 +152,11 @@ func (h *Handler) handleWebSocketChat(w http.ResponseWriter, r *http.Request) {
 	var req service.ChatRequest
 	if err := conn.ReadJSON(&req); err != nil {
 		h.logger.Error("Failed to read WebSocket message", zap.Error(err))
+		// Send error to client before closing
+		errorResponse := apperror.NewErrorResponse(
+			apperror.NewValidationError("Failed to read WebSocket message: invalid JSON", err),
+		)
+		_ = conn.WriteJSON(errorResponse)
 		return
 	}
 
@@ -172,8 +170,8 @@ func (h *Handler) handleWebSocketChat(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.logger.Error("WebSocket streaming failed", zap.Error(err))
-		errorMsg := map[string]string{"error": err.Error()}
-		_ = conn.WriteJSON(errorMsg)
+		errorResponse := apperror.NewErrorResponse(err)
+		_ = conn.WriteJSON(errorResponse)
 		return
 	}
 
@@ -188,4 +186,20 @@ func (h *Handler) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("# Metrics endpoint\n"))
+}
+
+// sendErrorResponse sends a standardized JSON error response
+func (h *Handler) sendErrorResponse(w http.ResponseWriter, err error) {
+	statusCode := apperror.GetHTTPStatusCode(err)
+	errorResponse := apperror.NewErrorResponse(err)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	if encodeErr := json.NewEncoder(w).Encode(errorResponse); encodeErr != nil {
+		h.logger.Error("Failed to encode error response",
+			zap.Error(encodeErr),
+			zap.Error(err),
+		)
+	}
 }

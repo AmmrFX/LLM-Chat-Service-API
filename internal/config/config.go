@@ -77,25 +77,22 @@ func (c *Config) NewMessageStore() storage.MessageStore {
 	return storage.NewMemoryStore(c.MaxExchanges)
 }
 
-// NewCacheStore creates a new cache store (returns interface, can be nil if Redis unavailable)
 func (c *Config) NewCacheStore(logger *zap.Logger) storage.CacheStore {
 	redisStore, err := storage.NewRedisStore(c.RedisAddr, c.RedisPassword)
 	if err != nil {
 		logger.Warn("Failed to connect to Redis, continuing without cache",
 			zap.Error(err),
 		)
-		return nil // Return nil to indicate optional dependency unavailable
+		return nil 
 	}
 	logger.Info("Connected to Redis")
 	return redisStore
 }
 
-// NewLLMClient creates a new LLM client (returns interface)
 func (c *Config) NewLLMClient() llm.Client {
 	return llm.NewGroqClient(c.GroqAPIKey, c.GroqBaseURL, c.Model)
 }
 
-// NewLogger creates and initializes the logger
 func (c *Config) NewLogger() (*zap.Logger, error) {
 	if err := logging.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
@@ -114,23 +111,19 @@ func (c *Config) NewChatService(logger *zap.Logger) (service.ChatService, storag
 	// Create LLM client (interface)
 	llmClient := c.NewLLMClient()
 
-	// Create chat service with all interfaces injected
 	chatService := service.NewChatService(messageStore, cacheStore, llmClient, c.MaxTokens)
 
 	return chatService, cacheStore
 }
 
-// NewHandler creates a new API handler with injected dependencies
 func (c *Config) NewHandler(chatService service.ChatService, logger *zap.Logger) *api.Handler {
 	return api.NewHandler(chatService, logger)
 }
 
-// NewRouter creates a new router with injected dependencies
 func (c *Config) NewRouter(handler *api.Handler, logger *zap.Logger) *mux.Router {
 	return api.SetupRouter(handler, logger)
 }
 
-// NewHTTPServer creates a new HTTP server with injected dependencies
 func (c *Config) NewHTTPServer(router *mux.Router) *http.Server {
 	return &http.Server{
 		Addr:         ":" + c.Port,

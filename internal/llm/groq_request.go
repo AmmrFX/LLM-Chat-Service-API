@@ -8,32 +8,68 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
+
+	apperror "llm-chat-service/internal/error"
 )
 
 func (c *GroqClient) DoRequest(reqBody any) (*http.Response, error) {
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, apperror.NewInternalError("failed to marshal LLM request", err)
 	}
 
 	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, apperror.NewInternalError("failed to create HTTP request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
+	// Set a deadline for the request
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		// Check if it's a timeout error
+		if err.Error() == "context deadline exceeded" ||
+			strings.Contains(err.Error(), "timeout") ||
+			strings.Contains(err.Error(), "Client.Timeout exceeded") {
+			return nil, apperror.NewTimeoutError("LLM API request timed out", err)
+		}
+		return nil, apperror.NewLLMError("failed to send request to LLM API", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("groq API error: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+
+		// Check for specific HTTP status codes
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return nil, apperror.NewUnauthorizedError(
+				fmt.Sprintf("LLM API authentication failed (status %d)", resp.StatusCode),
+				fmt.Errorf("response: %s", string(bodyBytes)),
+			)
+		case http.StatusTooManyRequests:
+			return nil, apperror.NewRateLimitError(
+				"LLM API rate limit exceeded",
+				fmt.Errorf("status %d, response: %s", resp.StatusCode, string(bodyBytes)),
+			)
+		case http.StatusGatewayTimeout, http.StatusRequestTimeout:
+			duration := time.Since(start)
+			return nil, apperror.NewTimeoutError(
+				fmt.Sprintf("LLM API timed out after %v", duration),
+				fmt.Errorf("status %d", resp.StatusCode),
+			)
+		default:
+			return nil, apperror.NewLLMError(
+				fmt.Sprintf("LLM API returned error status %d", resp.StatusCode),
+				fmt.Errorf("response: %s", string(bodyBytes)),
+			)
+		}
 	}
+
 	// Don't close the body here - let the caller close it after reading
 	return resp, nil
 }
