@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application
@@ -14,17 +16,22 @@ type Config struct {
 	RedisPassword string
 	MaxTokens     int
 	MaxExchanges  int
+	Model         string
+	GroqBaseURL   string
 }
 
-// Load reads configuration from environment variables
+// ------------------------------------------------------------------------------------------------------
 func Load() (*Config, error) {
+	_ = godotenv.Load()
 	cfg := &Config{
 		Port:          getEnv("PORT", "8000"),
 		GroqAPIKey:    getEnv("GROQ_API_KEY", ""),
-		RedisAddr:     getEnv("REDIS_ADDR", "redis:6379"),
+		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		MaxTokens:     getEnvAsInt("MAX_TOKENS", 1024),
 		MaxExchanges:  getEnvAsInt("MAX_EXCHANGES", 20),
+		Model:         getEnv("MODEL", "llama-3.1-8b-instant"),
+		GroqBaseURL:   getEnv("GROQ_BASE_URL", "https://api.groq.com/openai/v1/chat/completions"),
 	}
 
 	if cfg.GroqAPIKey == "" {
@@ -34,6 +41,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// ------------------------------------------------------------------------------------------------------
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -41,6 +49,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+// ------------------------------------------------------------------------------------------------------
 func getEnvAsInt(key string, defaultValue int) int {
 	valueStr := os.Getenv(key)
 	if valueStr == "" {

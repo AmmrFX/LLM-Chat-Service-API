@@ -3,12 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"llm-chat-service/internal/api"
 	"llm-chat-service/internal/config"
-	"llm-chat-service/internal/llm"
 	"llm-chat-service/internal/logging"
-	"llm-chat-service/internal/service"
-	"llm-chat-service/internal/storage"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,55 +22,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logger
-	if err := logging.Init(); err != nil {
+	logger, err := cfg.NewLogger()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 	defer logging.Sync()
 
-	logger := logging.Logger
 	logger.Info("Starting LLM Chat Service",
 		zap.String("port", cfg.Port),
 		zap.String("redis_addr", cfg.RedisAddr),
 	)
 
-	// Initialize storage
-	memoryStore := storage.NewMemoryStore(cfg.MaxExchanges)
+	chatService, cacheStore := cfg.NewChatService(logger)
 
-	// Initialize Redis (optional, continue if it fails)
-	var redisStore *storage.RedisStore
-	redisStore, err = storage.NewRedisStore(cfg.RedisAddr, cfg.RedisPassword)
-	if err != nil {
-		logger.Warn("Failed to connect to Redis, continuing without cache",
-			zap.Error(err),
-		)
-		redisStore = nil
-	} else {
-		defer redisStore.Close()
-		logger.Info("Connected to Redis")
+	if cacheStore != nil {
+		defer cacheStore.Close()
 	}
 
-	// Initialize Groq client
-	groqClient := llm.NewGroqClient(cfg.GroqAPIKey)
+	handler := cfg.NewHandler(chatService, logger)
 
-	// Initialize chat service
-	chatService := service.NewChatService(memoryStore, redisStore, groqClient, cfg.MaxTokens)
+	router := cfg.NewRouter(handler, logger)
 
-	// Initialize handler
-	handler := api.NewHandler(chatService, logger)
-
-	// Setup router
-	router := api.SetupRouter(handler, logger)
-
-	// Create HTTP server
-	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
+	srv := cfg.NewHTTPServer(router)
 
 	// Start server in goroutine
 	go func() {

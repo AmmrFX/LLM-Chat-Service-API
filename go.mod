@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
+	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/redis/go-redis/v9 v9.3.0
 	github.com/tiktoken-go/tokenizer v0.1.0

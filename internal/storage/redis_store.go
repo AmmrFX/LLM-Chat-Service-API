@@ -39,7 +39,6 @@ func NewRedisStore(addr, password string) (*RedisStore, error) {
 	}, nil
 }
 
-// Close closes the Redis connection
 func (r *RedisStore) Close() error {
 	return r.client.Close()
 }
