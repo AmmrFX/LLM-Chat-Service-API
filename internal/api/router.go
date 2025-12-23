@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 
+	"llm-chat-service/internal/api/handlers"
+
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -10,13 +12,14 @@ import (
 )
 
 // SetupRouter configures HTTP routes
-func SetupRouter(handler *Handler, logger *zap.Logger) *mux.Router {
+func SetupRouter(handler *handlers.Handler, logger *zap.Logger) *mux.Router {
 	router := mux.NewRouter()
 
 	router.Use(func(next http.Handler) http.Handler {
 		return LoggingMiddleware(logger, next)
 	})
 
+	router.HandleFunc("/health", handler.HealthHandler).Methods("GET")
 	router.HandleFunc("/chat", handler.ChatHandler).Methods("GET", "POST")
 
 	router.Handle("/metrics", promhttp.Handler()).Methods("GET")

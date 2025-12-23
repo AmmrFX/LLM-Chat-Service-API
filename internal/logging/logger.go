@@ -8,7 +8,7 @@ import (
 // Logger is the global logger instance
 var Logger *zap.Logger
 
-// Init initializes the structured JSON logger
+// ------------------------------------------------------------------------------------------------------
 func Init() error {
 	config := zap.NewProductionConfig()
 	config.EncoderConfig.TimeKey = "timestamp"
@@ -26,7 +26,7 @@ func Init() error {
 	return nil
 }
 
-// Sync flushes any buffered log entries
+// ------------------------------------------------------------------------------------------------------
 func Sync() {
 	if Logger != nil {
 		_ = Logger.Sync()

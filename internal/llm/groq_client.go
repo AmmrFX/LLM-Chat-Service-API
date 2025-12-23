@@ -72,7 +72,7 @@ type Delta struct {
 	Content string `json:"content,omitempty"`
 }
 
-// StreamChat streams the chat completion response
+// ------------------------------------------------------------------------------------------------------
 func (c *GroqClient) StreamChat(messages []Message, maxTokens int, onToken func(string) error) (string, error) {
 	reqBody := ChatRequest{
 		Model:     c.model,
@@ -83,7 +83,7 @@ func (c *GroqClient) StreamChat(messages []Message, maxTokens int, onToken func(
 
 	resp, err := c.DoRequest(reqBody)
 	if err != nil {
-		return "", err // Already wrapped with AppError
+		return "", err 
 	}
 	defer resp.Body.Close()
 
@@ -97,6 +97,7 @@ func (c *GroqClient) StreamChat(messages []Message, maxTokens int, onToken func(
 	return fullResponse.String(), nil
 }
 
+// ------------------------------------------------------------------------------------------------------
 // Chat performs a non-streaming chat completion
 func (c *GroqClient) Chat(messages []Message, maxTokens int) (string, error) {
 	reqBody := ChatRequest{

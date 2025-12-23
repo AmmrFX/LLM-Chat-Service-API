@@ -13,6 +13,7 @@ import (
 	apperror "llm-chat-service/internal/error"
 )
 
+// ------------------------------------------------------------------------------------------------------
 func (c *GroqClient) DoRequest(reqBody any) (*http.Response, error) {
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -27,11 +28,9 @@ func (c *GroqClient) DoRequest(reqBody any) (*http.Response, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
-	// Set a deadline for the request
 	start := time.Now()
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// Check if it's a timeout error
 		if err.Error() == "context deadline exceeded" ||
 			strings.Contains(err.Error(), "timeout") ||
 			strings.Contains(err.Error(), "Client.Timeout exceeded") {
@@ -44,33 +43,34 @@ func (c *GroqClient) DoRequest(reqBody any) (*http.Response, error) {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		// Check for specific HTTP status codes
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return nil, apperror.NewUnauthorizedError(
-				fmt.Sprintf("LLM API authentication failed (status %d)", resp.StatusCode),
+				apperror.ErrUnauthorized.Error(),
 				fmt.Errorf("response: %s", string(bodyBytes)),
 			)
+
 		case http.StatusTooManyRequests:
 			return nil, apperror.NewRateLimitError(
-				"LLM API rate limit exceeded",
+				apperror.ErrRateLimit.Error(),
 				fmt.Errorf("status %d, response: %s", resp.StatusCode, string(bodyBytes)),
 			)
+
 		case http.StatusGatewayTimeout, http.StatusRequestTimeout:
 			duration := time.Since(start)
 			return nil, apperror.NewTimeoutError(
 				fmt.Sprintf("LLM API timed out after %v", duration),
 				fmt.Errorf("status %d", resp.StatusCode),
 			)
+
 		default:
 			return nil, apperror.NewLLMError(
-				fmt.Sprintf("LLM API returned error status %d", resp.StatusCode),
+				apperror.ErrInternal.Error(),
 				fmt.Errorf("response: %s", string(bodyBytes)),
 			)
 		}
 	}
 
-	// Don't close the body here - let the caller close it after reading
 	return resp, nil
 }
 
@@ -82,12 +82,10 @@ func ScanStream(scanner *bufio.Scanner, onToken func(string) error) (strings.Bui
 			continue
 		}
 
-		// Skip SSE prefix "data: "
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			line = line[6:]
 		}
 
-		// Check for [DONE] marker
 		if bytes.Equal(line, []byte("[DONE]")) {
 			break
 		}

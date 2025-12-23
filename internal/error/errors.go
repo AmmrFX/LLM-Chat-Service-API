@@ -16,4 +16,6 @@ var (
 	ErrRedisCacheMiss     = errors.New("redis cache miss: %w")
 	ErrInternal           = errors.New("internal error: %w")
 	ErrNotFound           = errors.New("not found: %w")
+	ErrRateLimit          = errors.New("rate limit exceeded")
+	ErrUnauthorized       = errors.New("unauthorized: %w")
 )

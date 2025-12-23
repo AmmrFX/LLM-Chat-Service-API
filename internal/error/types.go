@@ -27,6 +27,7 @@ type AppError struct {
 	Err        error     `json:"-"`
 }
 
+// ------------------------------------------------------------------------------------------------------
 // Error implements the error interface
 func (e *AppError) Error() string {
 	if e.Err != nil {
@@ -35,11 +36,9 @@ func (e *AppError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Type, e.Message)
 }
 
-// Unwrap implements the errors.Unwrap interface
-func (e *AppError) Unwrap() error {
-	return e.Err
-}
 
+
+// ------------------------------------------------------------------------------------------------------
 // NewValidationError creates a validation error
 func NewValidationError(message string, err error) *AppError {
 	return &AppError{
@@ -50,6 +49,7 @@ func NewValidationError(message string, err error) *AppError {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------
 // NewTimeoutError creates a timeout error
 func NewTimeoutError(message string, err error) *AppError {
 	return &AppError{
@@ -59,7 +59,7 @@ func NewTimeoutError(message string, err error) *AppError {
 		Err:        err,
 	}
 }
-
+// ------------------------------------------------------------------------------------------------------
 // NewLLMError creates an LLM API error
 func NewLLMError(message string, err error) *AppError {
 	return &AppError{
@@ -70,6 +70,7 @@ func NewLLMError(message string, err error) *AppError {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------
 // NewRateLimitError creates a rate limit error
 func NewRateLimitError(message string, err error) *AppError {
 	return &AppError{
@@ -80,6 +81,7 @@ func NewRateLimitError(message string, err error) *AppError {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------
 // NewInternalError creates an internal server error
 func NewInternalError(message string, err error) *AppError {
 	return &AppError{
@@ -90,6 +92,7 @@ func NewInternalError(message string, err error) *AppError {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------
 // NewUnauthorizedError creates an unauthorized error
 func NewUnauthorizedError(message string, err error) *AppError {
 	return &AppError{
@@ -100,6 +103,7 @@ func NewUnauthorizedError(message string, err error) *AppError {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------------
 // GetHTTPStatusCode returns the appropriate HTTP status code for an error
 func GetHTTPStatusCode(err error) int {
 	if err == nil {
@@ -119,13 +123,15 @@ func GetHTTPStatusCode(err error) int {
 
 	// Default to internal server error
 	return http.StatusInternalServerError
-}
+}	
 
+// ------------------------------------------------------------------------------------------------------
 // ErrorResponse represents the JSON error response structure
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
+// ------------------------------------------------------------------------------------------------------
 // ErrorDetail contains error details
 type ErrorDetail struct {
 	Type    ErrorType `json:"type"`
@@ -133,9 +139,11 @@ type ErrorDetail struct {
 	Code    string    `json:"code,omitempty"`
 }
 
+// ------------------------------------------------------------------------------------------------------
 // NewErrorResponse creates a standardized error response
 func NewErrorResponse(err error) ErrorResponse {
 	var appErr *AppError
+
 	if errors.As(err, &appErr) {
 		return ErrorResponse{
 			Error: ErrorDetail{
@@ -146,7 +154,6 @@ func NewErrorResponse(err error) ErrorResponse {
 		}
 	}
 
-	// Default error response
 	return ErrorResponse{
 		Error: ErrorDetail{
 			Type:    ErrorTypeInternal,
